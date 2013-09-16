@@ -1,39 +1,49 @@
-/*
- *  CvCapture.mm
- *
- *  Created by Nicholas Butko on 11/3/09.
- *  Copyright 2009. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
- * 3. The name of the author may not be used to endorse or promote products
- *    derived from this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE AUTHOR "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
- * EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
- * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
- * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
- * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- */
+/*M///////////////////////////////////////////////////////////////////////////////////////
+//
+// IMPORTANT: READ BEFORE DOWNLOADING, COPYING, INSTALLING OR USING.
+//
+// By downloading, copying, installing or using the software you agree to this license.
+// If you do not agree to this license, do not download, install,
+// copy or use the software.
+//
+//
+//                          License Agreement
+//                For Open Source Computer Vision Library
+//
+// Copyright (C) 2013, OpenCV Foundation, all rights reserved.
+// Third party copyrights are property of their respective owners.
+//
+// Redistribution and use in source and binary forms, with or without modification,
+// are permitted provided that the following conditions are met:
+//
+// * Redistribution's of source code must retain the above copyright notice,
+// this list of conditions and the following disclaimer.
+//
+// * Redistribution's in binary form must reproduce the above copyright notice,
+// this list of conditions and the following disclaimer in the documentation
+// and/or other materials provided with the distribution.
+//
+// * The name of the copyright holders may not be used to endorse or promote products
+// derived from this software without specific prior written permission.
+//
+// This software is provided by the copyright holders and contributors "as is" and
+// any express or implied warranties, including, but not limited to, the implied
+// warranties of merchantability and fitness for a particular purpose are disclaimed.
+// In no event shall the contributor be liable for any direct,
+// indirect, incidental, special, exemplary, or consequential damages
+// (including, but not limited to, procurement of substitute goods or services;
+// loss of use, data, or profits; or business interruption) however caused
+// and on any theory of liability, whether in contract, strict liability,
+// or tort (including negligence or otherwise) arising in any way out of
+// the use of this software, even if advised of the possibility of such damage.
+//
+//M*////////////////////////////////////////////////////////////////////////////////////////
+
 
 #include "precomp.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #include <iostream>
 #import <QTKit/QTKit.h>
-
-using namespace std;
 
 /********************** Declaration of class headers ************************/
 
@@ -248,7 +258,7 @@ CvCaptureCAM::CvCaptureCAM(int cameraNum) {
     camNum = cameraNum;
 
     if (!startCaptureDevice(camNum)) {
-        cout << "Warning, camera failed to properly initialize!" << endl;
+        std::cout << "Warning, camera failed to properly initialize!" << std::endl;
         started = 0;
     } else {
         started = 1;
@@ -259,7 +269,7 @@ CvCaptureCAM::CvCaptureCAM(int cameraNum) {
 CvCaptureCAM::~CvCaptureCAM() {
     stopCaptureDevice();
 
-    cout << "Cleaned up camera." << endl;
+    std::cout << "Cleaned up camera." << std::endl;
 }
 
 int CvCaptureCAM::didStart() {
@@ -277,8 +287,11 @@ bool CvCaptureCAM::grabFrame(double timeOut) {
     double sleepTime = 0.005;
     double total = 0;
 
-    while (![capture updateImage] && (total += sleepTime)<=timeOut)
-        usleep((int)(sleepTime*1000));
+    NSDate *loopUntil = [NSDate dateWithTimeIntervalSinceNow:sleepTime];
+    while (![capture updateImage] && (total += sleepTime)<=timeOut &&
+           [[NSRunLoop currentRunLoop] runMode: NSDefaultRunLoopMode
+                                    beforeDate:loopUntil])
+        loopUntil = [NSDate dateWithTimeIntervalSinceNow:sleepTime];
 
     [localpool drain];
 
@@ -317,7 +330,7 @@ int CvCaptureCAM::startCaptureDevice(int cameraNum) {
             arrayByAddingObjectsFromArray:[QTCaptureDevice inputDevicesWithMediaType:QTMediaTypeMuxed]] retain];
 
     if ([devices count] == 0) {
-        cout << "QTKit didn't find any attached Video Input Devices!" << endl;
+        std::cout << "QTKit didn't find any attached Video Input Devices!" << std::endl;
         [localpool drain];
         return 0;
     }
@@ -337,7 +350,7 @@ int CvCaptureCAM::startCaptureDevice(int cameraNum) {
 
         success = [device open:&error];
         if (!success) {
-            cout << "QTKit failed to open a Video Capture Device" << endl;
+            std::cout << "QTKit failed to open a Video Capture Device" << std::endl;
             [localpool drain];
             return 0;
         }
@@ -348,7 +361,7 @@ int CvCaptureCAM::startCaptureDevice(int cameraNum) {
         success = [mCaptureSession addInput:mCaptureDeviceInput error:&error];
 
         if (!success) {
-            cout << "QTKit failed to start capture session with opened Capture Device" << endl;
+            std::cout << "QTKit failed to start capture session with opened Capture Device" << std::endl;
             [localpool drain];
             return 0;
         }
@@ -380,7 +393,7 @@ int CvCaptureCAM::startCaptureDevice(int cameraNum) {
 
         success = [mCaptureSession addOutput:mCaptureDecompressedVideoOutput error:&error];
         if (!success) {
-            cout << "QTKit failed to add Output to Capture Session" << endl;
+            std::cout << "QTKit failed to add Output to Capture Session" << std::endl;
             [localpool drain];
             return 0;
         }
@@ -398,6 +411,9 @@ int CvCaptureCAM::startCaptureDevice(int cameraNum) {
 
 void CvCaptureCAM::setWidthHeight() {
     NSAutoreleasePool* localpool = [[NSAutoreleasePool alloc] init];
+
+    [mCaptureSession stopRunning];
+
     NSDictionary* pixelBufferOptions = [NSDictionary dictionaryWithObjectsAndKeys:
                           [NSNumber numberWithDouble:1.0*width], (id)kCVPixelBufferWidthKey,
                           [NSNumber numberWithDouble:1.0*height], (id)kCVPixelBufferHeightKey,
@@ -406,6 +422,9 @@ void CvCaptureCAM::setWidthHeight() {
                           nil];
 
     [mCaptureDecompressedVideoOutput setPixelBufferAttributes:pixelBufferOptions];
+
+    [mCaptureSession startRunning];
+
     grabFrame(60);
     [localpool drain];
 }
@@ -522,7 +541,7 @@ didDropVideoFrameWithSampleBuffer:(QTSampleBuffer *)sampleBuffer
     (void)captureOutput;
     (void)sampleBuffer;
     (void)connection;
-    cout << "Camera dropped frame!" << endl;
+    std::cout << "Camera dropped frame!" << std::endl;
 }
 
 -(IplImage*) getOutput {
@@ -631,7 +650,7 @@ CvCaptureFile::CvCaptureFile(const char* filename) {
                            forKey:QTMovieLoopsAttribute];
 
     if (mCaptureSession == nil) {
-        cout << "WARNING: Couldn't read movie file " << filename << endl;
+        std::cout << "WARNING: Couldn't read movie file " << filename << std::endl;
         [localpool drain];
         started = 0;
         return;
@@ -800,7 +819,7 @@ double CvCaptureFile::getProperty(int property_id){
     double retval;
     QTTime t;
 
-    //cerr << "get_prop"<<endl;
+    //cerr << "get_prop"<<std::endl;
     switch (property_id) {
         case CV_CAP_PROP_POS_MSEC:
             [[mCaptureSession attributeForKey:QTMovieCurrentTimeAttribute] getValue:&t];
@@ -923,8 +942,8 @@ CvVideoWriter_QT::CvVideoWriter_QT(const char* filename, int fourcc,
     cc[4] = 0;
     int cc2 = CV_FOURCC(cc[0], cc[1], cc[2], cc[3]);
     if (cc2!=fourcc) {
-        cout << "WARNING: Didn't properly encode FourCC. Expected " << fourcc
-        << " but got " << cc2 << "." << endl;
+        std::cout << "WARNING: Didn't properly encode FourCC. Expected " << fourcc
+        << " but got " << cc2 << "." << std::endl;
     }
 
     codec = [[NSString stringWithCString:cc encoding:NSASCIIStringEncoding] retain];
@@ -935,13 +954,13 @@ CvVideoWriter_QT::CvVideoWriter_QT(const char* filename, int fourcc,
         NSFileManager* files = [NSFileManager defaultManager];
         if ([files fileExistsAtPath:path]) {
             if (![files removeItemAtPath:path error:nil]) {
-                cout << "WARNING: Failed to remove existing file " << [path cStringUsingEncoding:NSASCIIStringEncoding] << endl;
+                std::cout << "WARNING: Failed to remove existing file " << [path cStringUsingEncoding:NSASCIIStringEncoding] << std::endl;
             }
         }
 
         mMovie = [[QTMovie alloc] initToWritableFile:path error:&error];
         if (!mMovie) {
-            cout << "WARNING: Could not create empty movie file container." << endl;
+            std::cout << "WARNING: Could not create empty movie file container." << std::endl;
             [localpool drain];
             return;
         }
@@ -1016,7 +1035,7 @@ bool CvVideoWriter_QT::writeFrame(const IplImage* image) {
                                                                                       [NSNumber numberWithInt:100*movieFPS], QTTrackTimeScaleAttribute,nil]];
 
     if (![mMovie updateMovieFile]) {
-        cout << "Didn't successfully update movie file." << endl;
+        std::cout << "Didn't successfully update movie file." << std::endl;
     }
 
     [imageRep release];
@@ -1025,4 +1044,3 @@ bool CvVideoWriter_QT::writeFrame(const IplImage* image) {
 
     return 1;
 }
-
