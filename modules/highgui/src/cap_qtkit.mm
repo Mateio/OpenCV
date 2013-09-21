@@ -309,6 +309,8 @@ void CvCaptureCAM::stopCaptureDevice() {
 
     QTCaptureDevice *device = [mCaptureDeviceInput device];
     if ([device isOpen])  [device close];
+    
+    [mCaptureSession removeInput:mCaptureDeviceInput];
 
     [mCaptureSession release];
     [mCaptureDeviceInput release];
@@ -331,6 +333,7 @@ int CvCaptureCAM::startCaptureDevice(int cameraNum) {
 
     if ([devices count] == 0) {
         std::cout << "QTKit didn't find any attached Video Input Devices!" << std::endl;
+        [devices release];
         [localpool drain];
         return 0;
     }
@@ -338,11 +341,17 @@ int CvCaptureCAM::startCaptureDevice(int cameraNum) {
     if (cameraNum >= 0) {
         int nCameras = [devices count];
         if( cameraNum < 0 || cameraNum >= nCameras )
+        {
+            [devices release];
+            [localpool drain];
             return 0;
+        }
+        
         device = [devices objectAtIndex:cameraNum] ;
     } else {
         device = [QTCaptureDevice defaultInputDeviceWithMediaType:QTMediaTypeVideo]  ;
     }
+    
     int success;
     NSError* error;
 
@@ -351,6 +360,8 @@ int CvCaptureCAM::startCaptureDevice(int cameraNum) {
         success = [device open:&error];
         if (!success) {
             std::cout << "QTKit failed to open a Video Capture Device" << std::endl;
+            [device release];
+            [devices release];
             [localpool drain];
             return 0;
         }
@@ -362,6 +373,8 @@ int CvCaptureCAM::startCaptureDevice(int cameraNum) {
 
         if (!success) {
             std::cout << "QTKit failed to start capture session with opened Capture Device" << std::endl;
+            [device release];
+            [devices release];
             [localpool drain];
             return 0;
         }
@@ -385,15 +398,15 @@ int CvCaptureCAM::startCaptureDevice(int cameraNum) {
                                   nil];
         }
         [mCaptureDecompressedVideoOutput setPixelBufferAttributes:pixelBufferOptions];
-
+        
 #if QTKIT_VERSION_MAX_ALLOWED >= QTKIT_VERSION_7_6_3
         [mCaptureDecompressedVideoOutput setAutomaticallyDropsLateVideoFrames:YES];
 #endif
-
-
+        
         success = [mCaptureSession addOutput:mCaptureDecompressedVideoOutput error:&error];
         if (!success) {
             std::cout << "QTKit failed to add Output to Capture Session" << std::endl;
+            [device release];
             [localpool drain];
             return 0;
         }
@@ -402,6 +415,7 @@ int CvCaptureCAM::startCaptureDevice(int cameraNum) {
 
         grabFrame(60);
 
+        [localpool drain];
         return 1;
     }
 
