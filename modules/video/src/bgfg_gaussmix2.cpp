@@ -287,6 +287,7 @@ struct MOG2Invoker : ParallelLoopBody
         AutoBuffer<float> buf(src->cols*nchannels);
         float alpha1 = 1.f - alphaT;
         float dData[CV_CN_MAX];
+        bool readOnly = alphaT <= 0;
 
         for( int y = y0; y < y1; y++ )
         {
@@ -349,7 +350,14 @@ struct MOG2Invoker : ParallelLoopBody
 
                         //background? - Tb - usually larger than Tg
                         if( totalWeight < TB && dist2 < Tb*var )
+                        {
                             background = true;
+                            if (readOnly)
+                                break;
+                        }
+                        
+                        if (readOnly)
+                            continue;
 
                         //check fit
                         if( dist2 < Tg*var )
@@ -408,56 +416,60 @@ struct MOG2Invoker : ParallelLoopBody
                 //////
 
                 //renormalize weights
-                totalWeight = 1.f/totalWeight;
-                for( int mode = 0; mode < nmodes; mode++ )
+                if (!readOnly)
                 {
-                    gmm[mode].weight *= totalWeight;
-                }
-
-                nmodes = nNewModes;
-
-                //make new mode if needed and exit
-                if( !fitsPDF )
-                {
-                    // replace the weakest or add a new one
-                    int mode = nmodes == nmixtures ? nmixtures-1 : nmodes++;
-
-                    if (nmodes==1)
-                        gmm[mode].weight = 1.f;
-                    else
+                    totalWeight = 1.f/totalWeight;
+                    for( int mode = 0; mode < nmodes; mode++ )
                     {
-                        gmm[mode].weight = alphaT;
-
-                        // renormalize all other weights
-                        for( int i = 0; i < nmodes-1; i++ )
-                            gmm[i].weight *= alpha1;
+                        gmm[mode].weight *= totalWeight;
                     }
 
-                    // init
-                    for( int c = 0; c < nchannels; c++ )
-                        mean[mode*nchannels + c] = data[c];
+                    nmodes = nNewModes;
 
-                    gmm[mode].variance = varInit;
-
-                    //sort
-                    //find the new place for it
-                    for( int i = nmodes - 1; i > 0; i-- )
+                    //make new mode if needed and exit
+                    if( !fitsPDF )
                     {
-                        // check one up
-                        if( alphaT < gmm[i-1].weight )
-                            break;
+                        // replace the weakest or add a new one
+                        int mode = nmodes == nmixtures ? nmixtures-1 : nmodes++;
 
-                        // swap one up
-                        std::swap(gmm[i], gmm[i-1]);
+                        if (nmodes==1)
+                            gmm[mode].weight = 1.f;
+                        else
+                        {
+                            gmm[mode].weight = alphaT;
+
+                            // renormalize all other weights
+                            for( int i = 0; i < nmodes-1; i++ )
+                                gmm[i].weight *= alpha1;
+                        }
+
+                        // init
                         for( int c = 0; c < nchannels; c++ )
-                            std::swap(mean[i*nchannels + c], mean[(i-1)*nchannels + c]);
-                    }
-                }
+                            mean[mode*nchannels + c] = data[c];
 
-                //set the number of modes
-                modesUsed[x] = uchar(nmodes);
+                        gmm[mode].variance = varInit;
+
+                        //sort
+                        //find the new place for it
+                        for( int i = nmodes - 1; i > 0; i-- )
+                        {
+                            // check one up
+                            if( alphaT < gmm[i-1].weight )
+                                break;
+
+                            // swap one up
+                            std::swap(gmm[i], gmm[i-1]);
+                            for( int c = 0; c < nchannels; c++ )
+                                std::swap(mean[i*nchannels + c], mean[(i-1)*nchannels + c]);
+                        }
+                    }
+
+                    //set the number of modes
+                    modesUsed[x] = uchar(nmodes);
+                }
+                
                 mask[x] = background ? 0 :
-                    detectShadows && detectShadowGMM(data, nchannels, nmodes, gmm, mean, Tb, TB, tau) ?
+                    !readOnly && detectShadows && detectShadowGMM(data, nchannels, nmodes, gmm, mean, Tb, TB, tau) ?
                     shadowVal : 255;
             }
         }
